@@ -8,8 +8,8 @@ betaWins = 0
 for i in range(300):
     game = Game()
     randomBot = RandomBot()
-    betaFive = RandomBot()
-    # betaFive = MCTSBot()
+    # betaFive = RandomBot()
+    betaFive = MCTSBot()
 
     randomStarts = (i % 2 == 0)
 

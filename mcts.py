@@ -4,6 +4,7 @@
 Explanation: ??? xD
 
 '''
+import numpy as np
 
 class GameState:
 
@@ -12,20 +13,20 @@ class GameState:
         self.nextMoves = None
         self.prevMove = None
         self.value = None
-        self.needsEvaluation = True
+        self._needsEvaluation = True
 
     def isLeaf(self):
         return self.nextMoves is None
 
     def getMostPopularMove(self):
-        mostPopular = max(self.nextMoves, key = lambda edge: edge.N)
+        mostPopular = max(self.nextMoves, key = lambda move: move.N)
         return mostPopular
 
     def setChildren(self, children):
         self.nextMoves = children
 
     def getHighestScoringMove(self):
-        chosen = max(self.nextMoves, key = lambda edge: edge.getScore())
+        chosen = max(self.nextMoves, key = lambda move: move.getScore())
         ''''
         # softmax - for later - improves exploration
         score = np.array(list(map(Node.getScore, self.nextMoves)))
@@ -37,14 +38,12 @@ class GameState:
 
     def backup(self, value):
         self.value = value
-        self.needsEvaluation = False
-        self.prevmove.backup(value)
-
-    def backup(self):
-        self.prevMove.backup(self.value)
+        self._needsEvaluation = False
+        if self.prevMove is not None:
+            self.prevMove.backup(value)
 
     def needsEvaluation(self):
-        return self.needsEvaluation
+        return self._needsEvaluation
 
 class Move:
 
@@ -86,7 +85,7 @@ class MCTS:
 
     def __init__(self, evaluator):
         self.root = None
-        self.simulations = 10
+        self.simulations = 50
         self.evaluator = evaluator
         self.bestMove = None
 
@@ -101,9 +100,9 @@ class MCTS:
                 value = self.evaluate(leaf)
                 leaf.backup(value)
             else:
-                leaf.backup()
+                leaf.backup(leaf.value)
 
-        self.bestMove = self.root.getMostPopularMove.move, self.root.player
+        self.bestMove = self.root.getMostPopularMove().move
 
     ## select a path to a leaf
     def select(self, node):
@@ -121,27 +120,28 @@ class MCTS:
 
     def expandTree(self, leaf, legalMoves, probs):
         game = leaf.game
-        legalMoves = self._applyProbabilitiesToMoves(legalMoves, probs, game.board.shape)
+        legalMoves = self._getLegalMovesWithProbs(legalMoves, probs, game.board.shape)
         children = self._getChildren(legalMoves, leaf)
-        if 0 <= len(children):
+        children = np.random.permutation(children)
+        if 0 < len(children):
             leaf.setChildren(children)
 
     @staticmethod
-    def _applyProbabilitiesToMoves(moves, probs, boardShape):
+    def _getLegalMovesWithProbs(moves, probs, boardShape):
         probs = probs.reshape(boardShape)
-        probsOfLegalMoves = np.zeros(len(moves))
+        legalMovesWithProbs = []
         for i, move in enumerate(moves):
-            probsOfLegalMoves[i] = probs[move[0], move[1]]
-        return np.stack((moves, probsOfLegalMoves), axis = 1)
+            prob = probs[move[0], move[1]]
+            yield move[0], move[1], prob
 
     @staticmethod
     def _getChildren(legalMovesWithProbs, parent):
         # children = np.full(len(legalMovesWithProbs), None, dtype=Edge)
         children = []
-        for i, (x, y, prob) in enumerate(legalMovesWithProbs):
+        for i, (x,y,prob) in enumerate(legalMovesWithProbs):
             newGame = parent.game.makeMove(x,y)
-            child = Node(newGame, player)
-            edge = Edge(parent, child, (x,y), prob)
+            child = GameState(newGame)
+            edge = Move(parent, child, (x,y), prob)
             child.parent = edge
             children.append(edge)
             # children[i] = edge
