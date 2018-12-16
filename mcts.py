@@ -26,29 +26,23 @@ class GameState:
         self.nextMoves = children
 
     def getHighestScoringMove(self):
-        chosen = max(self.nextMoves, key = lambda move: move.getScore())
-        ''''
-        # softmax - for later - improves exploration
-        score = np.array(list(map(Node.getScore, self.nextMoves)))
-        e_score = np. exp(score - np.max(score))
-        probs = e_score / e_score.sum()
-        chosen = np.random.choice(self.nextMoves, p=probs)[0]
-        '''
-        return chosen
+        return max(self.nextMoves, key = lambda move: move.getScore())
 
     def backup(self, value):
         self.value = value
         self._needsEvaluation = False
         if self.prevMove is not None:
-            self.prevMove.backup(value)
+            if value == 0.5:
+                self.prevMove.backupAll(value)
+            elif value == 1:
+                self.prevMove.backupLoser(value)
+            else:
+                self.prevMove.backupWinner(value)
 
     def needsEvaluation(self):
         return self._needsEvaluation
 
 class Move:
-
-    puctConst = 1.4142
-    totalN = 0
 
     def __init__(self, before, after, move, prob):
         self.before = before
@@ -61,31 +55,35 @@ class Move:
         self.V = 0 # score
 
     def getScore(self):
-        return self.Q + self.getUpperBound()
+        return self.Q
 
-    def getUpperBound(self):
-        return self.P * Move.puctConst * np.sqrt(Move.totalN) / (1 + self.N)
-
-    ## backup with value
-    def backup(self, value):
+    def backupAll(self, value):
         self.V += value
         self.N += 1
         self.Q = self.V / self.N
         if self.before.prevMove is not None:
-            self.before.prevMove._backupNoValue(value)
+            self.before.prevMove.backupAll(value)
 
-    ## backup, but the value is for the opposite player
-    def _backupNoValue(self, value):
+    ## backup with value
+    def backupWinner(self, value):
+        self.V += value
         self.N += 1
         self.Q = self.V / self.N
         if self.before.prevMove is not None:
-            self.before.prevMove.backup(value)
+            self.before.prevMove.backupLoser(value)
+
+    ## backup, but the value is for the opposite player
+    def backupLoser(self, value):
+        self.N += 1
+        self.Q = self.V / self.N
+        if self.before.prevMove is not None:
+            self.before.prevMove.backupWinner(value)
 
 class MCTS:
 
     def __init__(self, evaluator):
         self.root = None
-        self.simulations = 50
+        self.simulations = 100
         self.evaluator = evaluator
         self.bestMove = None
 
@@ -98,10 +96,10 @@ class MCTS:
             leaf = self.select(self.root)
             if leaf.needsEvaluation():
                 value = self.evaluate(leaf)
-                leaf.backup(value)
             else:
-                leaf.backup(leaf.value)
-
+                value = leaf.value
+            leaf.backup(value)
+        
         self.bestMove = self.root.getMostPopularMove().move
 
     ## select a path to a leaf
@@ -114,7 +112,7 @@ class MCTS:
     def evaluate(self, leaf):
         game = leaf.game
         legalMoves = game.getLegalMoves()
-        probs, value = self.evaluator(game.board, game.player)
+        probs, value = self.evaluator(game)
         self.expandTree(leaf, legalMoves, probs)
         return value
 
@@ -142,12 +140,28 @@ class MCTS:
             newGame = parent.game.makeMove(x,y)
             child = GameState(newGame)
             edge = Move(parent, child, (x,y), prob)
-            child.parent = edge
+            child.prevMove = edge
             children.append(edge)
             # children[i] = edge
 
         return np.array(children)
         # return children
+
+    def dump(self):
+        edges = list(self.root.nextMoves)
+        edges.append(None)
+        while edges:
+            edge = edges[0]
+            edges = edges[1:]
+            if edge is None:
+                print('\n')
+                if edges:
+                    edges.append(None)
+            else:
+                print(edge.N, end=' ')
+                state = edge.after
+                if state.nextMoves is not None:
+                    edges += list(state.nextMoves)
 
     def getBestMove(self):
         return self.bestMove

@@ -12,7 +12,7 @@ class Game:
         self.k = k
         self.player = player
         self.movesMade = movesMade
-        self.maxMoves = n * n
+        self.maxMoves = self.n * self.n
         self.winner = None
         self._isOn = True
 
